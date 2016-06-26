@@ -1,0 +1,13 @@
+{
+	"name": "sphinxddoc-parser",
+	"authors": ["Benjamin Schaaf"],
+	"description": "D Domain and autodoc implementation for Sphinx",
+	"copyright": "Copyright © 2016, Benjamin Schaaf",
+	"license": "GPLv3",
+    "dependencies": {
+        "libdparse": "~>0.7.0-alpha9",
+        "painlessjson": "~>1.3.7",
+    },
+    "targetType": "executable",
+    "targetName": "d2json",
+}
