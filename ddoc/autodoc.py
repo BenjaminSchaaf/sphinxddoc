@@ -80,8 +80,6 @@ class Documenter(autodoc.Documenter):
             members = [(membername, member) for (membername, member) in members
                        if membername not in self.options.exclude_members]
 
-        members.sort(key=lambda member: member[0])
-
         # document non-skipped members
         memberdocumenters = []
         for (mname, member) in members:
