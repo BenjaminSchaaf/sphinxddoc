@@ -54,8 +54,12 @@ JSONValue toJson(Declaration[] declarations) {
     JSONValue[] ret = [];
     foreach (decl; declarations) {
         Nullable!JSONValue value;
-        if (decl.classDeclaration) value = toJson(cast(ClassDeclaration)decl.classDeclaration);
-        if (decl.functionDeclaration) value = toJson(cast(FunctionDeclaration)decl.functionDeclaration);
+        enum get(string name) = "if (decl."~name~") value = toJson(cast("~name[0..1].toUpper~name[1..$]~")decl."~name~");";
+
+        mixin(get!"classDeclaration");
+        mixin(get!"functionDeclaration");
+        mixin(get!"constructor");
+
         if (!value.isNull) {
             if (value.object["doc"].str.toLower == "ditto") {
                 ret[$-1].object["sig"].str = ret[$-1].object["sig"].str ~ "\n" ~ value.object["sig"].str;
@@ -94,4 +98,17 @@ auto toJson(FunctionDeclaration decl) {
 auto getSig(FunctionDeclaration decl) {
     auto name = decl.name.text;
     return " %s".format(name);
+}
+
+auto toJson(Constructor decl) {
+    return JSONValue([
+        "name": "this".toJson,
+        "sig": decl.getSig.toJson,
+        "doc": decl.comment.toJson,
+        "kind": "function".toJson,
+    ]);
+}
+
+auto getSig(Constructor decl) {
+    return "this";
 }
