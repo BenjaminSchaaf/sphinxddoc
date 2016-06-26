@@ -107,9 +107,13 @@ class ModuleDocumenter(Documenter):
 class FunctionDocumenter(Documenter):
     objtype = 'function'
 
+class ClassDocumenter(Documenter):
+    objtype = 'class'
+
 def setup(app):
     app.add_autodocumenter(ModuleDocumenter)
     app.add_autodocumenter(FunctionDocumenter)
+    app.add_autodocumenter(ClassDocumenter)
 
     app.add_config_value('autoclass_content', 'class', True)
     app.add_config_value('autodoc_member_order', 'alphabetic', True)
