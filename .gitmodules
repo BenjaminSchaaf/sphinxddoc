@@ -1,3 +1,3 @@
 [submodule "vendor/libdparse"]
 	path = vendor/libdparse
-	url = git@github.com:Hackerpilot/libdparse.git
+	url = https://github.com/Hackerpilot/libdparse.git
