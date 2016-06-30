@@ -1,4 +1,4 @@
-module app;
+module d2json;
 
 import std.json;
 import std.stdio;
@@ -8,19 +8,25 @@ import std.format;
 import std.typecons;
 import std.algorithm;
 
+import pyd.pyd;
+
 import dparse.ast;
 import dparse.lexer;
 import dparse.parser;
 import dparse.rollback_allocator;
 
-void main(string[] args) {
-    auto files = args[1..$].map!(a => File(a, "r"));
+string d2json(string path) {
+    auto file = File(path, "r");
+    auto data = file.byChunk(4096).join;
+    auto mod = parse(data, file.name);
+    auto json = mod.toJson;
+    return toJSON(&json, true);
+}
 
-    foreach (file; files) {
-        auto data = file.byChunk(4096).join;
-        auto mod = parse(data, file.name);
-        writeln(mod.toJson);
-    }
+extern (C) void PydMain() {
+    def!d2json;
+
+    module_init();
 }
 
 auto parse(ubyte[] source, string filename) {

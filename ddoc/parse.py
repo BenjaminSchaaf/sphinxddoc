@@ -1,6 +1,7 @@
 import os
 import json
 import subprocess
+import d2json
 
 PARSER = os.path.join(os.path.split(__file__)[0], "d2json")
 
@@ -19,5 +20,5 @@ def lookup_module_file(directory, name):
         return package_file_path
 
 def parse_file(path):
-    output = subprocess.check_output([PARSER, path], universal_newlines=True)
+    output = d2json.d2json(path)
     return json.loads(output)

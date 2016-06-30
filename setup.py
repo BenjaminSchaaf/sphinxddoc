@@ -1,24 +1,25 @@
 import os
+import pathlib
 
-from distutils.command.build_py import build_py
 from distutils.core import setup
-from distutils.command.install import INSTALL_SCHEMES
+from pyd.support import setup, Extension
 
-for scheme in INSTALL_SCHEMES.values():
-    scheme['data'] = scheme['purelib']
-
-class build_d_and_py(build_py):
-    def run(self):
-        build_py.run(self)
-        print("running dub")
-        os.system("dub build")
+dmodules = ['ddoc/d2json.d']
+for folder in ['std', 'dparse']:
+    path = pathlib.Path(os.path.join('ddoc', folder))
+    dmodules += map(str, path.rglob('*.d'))
 
 setup(name='ddoc',
       version='0.1',
       description='Python Distribution Utilities',
       author='Benjamin Schaaf',
       packages=['ddoc'],
-      cmdclass={'build_py': build_d_and_py},
-      data_files=[('ddoc', ['d2json'])],
-      package_data={'': ['d2json']}, # Wish this worked, but distutils is retarded
+      ext_modules=[
+          Extension(
+              'd2json', dmodules,
+              extra_compile_args=['-w', '-Iddoc', '-debug'],
+              build_deimos=True,
+              d_lump=True,
+          ),
+      ]
      )
