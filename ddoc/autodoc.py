@@ -82,9 +82,9 @@ class Documenter(autodoc.Documenter):
         for imp in imports:
             for name in imp['imported']:
                 if name['rename']:
-                    self.add_line(u'* %s = :d:mod:`%s`' % (name['rename'], name['name']), sourcename)
+                    self.add_line(u'  | %s = :d:mod:`%s`' % (name['rename'], name['name']), sourcename)
                 else:
-                    self.add_line(u'* :d:mod:`%s`' % (name['name']), sourcename)
+                    self.add_line(u'  | :d:mod:`%s`' % (name['name']), sourcename)
 
     def document_members(self, all_members=False):
         """Generate reST for member documentation.
@@ -133,10 +133,18 @@ class FunctionDocumenter(Documenter):
 class ClassDocumenter(Documenter):
     objtype = 'class'
 
+class StructDocumenter(Documenter):
+    objtype = 'struct'
+
+class VariableDocumenter(Documenter):
+    objtype = 'variable'
+
 def setup(app):
     app.add_autodocumenter(ModuleDocumenter)
     app.add_autodocumenter(FunctionDocumenter)
     app.add_autodocumenter(ClassDocumenter)
+    app.add_autodocumenter(StructDocumenter)
+    app.add_autodocumenter(VariableDocumenter)
 
     app.add_config_value('autoclass_content', 'class', True)
     app.add_config_value('autodoc_member_order', 'alphabetic', True)
