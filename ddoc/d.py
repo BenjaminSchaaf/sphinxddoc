@@ -1,5 +1,3 @@
-#TODO: Autodoc for D would be nice
-
 from docutils import nodes
 from docutils.parsers.rst import directives
 
