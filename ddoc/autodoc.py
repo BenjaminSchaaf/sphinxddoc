@@ -48,7 +48,8 @@ class Documenter(autodoc.Documenter):
         if "members" not in self.object:
             return []
 
-        return [(obj["name"], obj) for obj in self.object["members"]]
+        members = [obj for obj in self.object["members"] if "name" in obj]
+        return [(obj["name"], obj) for obj in members]
 
     def add_directive_header(self, sig):
         domain = getattr(self, 'domain', 'd')
@@ -65,12 +66,34 @@ class Documenter(autodoc.Documenter):
         #    # etc. don't support a prepended module name
         #    self.add_line(u'   :module: %s' % self.modname, sourcename)
 
+    def document_imports(self):
+        if 'members' not in self.object:
+            return
+
+        imports = self.object["members"]
+        imports = [imp for imp in imports if imp["kind"] == 'import' and 'public' in imp['attributes']]
+
+        if len(imports) == 0:
+            return
+
+        sourcename = self.get_sourcename()
+        self.add_line(u'Public Imports:', sourcename)
+        self.add_line(u'', sourcename)
+        for imp in imports:
+            for name in imp['imported']:
+                if name['rename']:
+                    self.add_line(u'* %s = :d:mod:`%s`' % (name['rename'], name['name']), sourcename)
+                else:
+                    self.add_line(u'* :d:mod:`%s`' % (name['name']), sourcename)
+
     def document_members(self, all_members=False):
         """Generate reST for member documentation.
 
         If *all_members* is True, do all members, else those given by
         *self.options.members*.
         """
+        self.document_imports()
+
         want_all = all_members or self.options.inherited_members or \
             self.options.members is autodoc.ALL
         members = self.get_object_members(want_all)

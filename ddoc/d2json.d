@@ -7,6 +7,7 @@ import std.string;
 import std.format;
 import std.typecons;
 import std.algorithm;
+import std.container;
 
 import pyd.pyd;
 
@@ -29,12 +30,15 @@ extern (C) void PydMain() {
     module_init();
 }
 
+static SList!string attributes;
+
 auto parse(ubyte[] source, string filename) {
-    auto stringCache = new StringCache(4);
     auto config = LexerConfig(filename);
-    auto tokens = getTokensForParser(source, config, stringCache);
-    auto allocator = new RollbackAllocator;
-    return parseModule(tokens, filename, allocator);
+    auto stringCache = StringCache(StringCache.defaultBucketCount);
+    auto tokens = getTokensForParser(source, config, &stringCache);
+    RollbackAllocator allocator;
+    auto mod = parseModule(tokens, filename, &allocator);
+    return mod.toJson;
 }
 
 auto toJson(T)(T value) {
@@ -43,6 +47,7 @@ auto toJson(T)(T value) {
 
 auto toJson(Module mod) {
     auto name = mod.moduleDeclaration.moduleName.identifier_join;
+
     return JSONValue([
         "name": name.toJson,
         "sig": "module %s".format(name).toJson,
@@ -53,28 +58,62 @@ auto toJson(Module mod) {
 }
 
 auto identifier_join(IdentifierChain chain) {
+    assert(chain.identifiers);
     return chain.identifiers.map!(i => i.text).join(".");
 }
 
 JSONValue toJson(Declaration[] declarations) {
     JSONValue[] ret = [];
     foreach (decl; declarations) {
+        // expand attribute declarations
+        if (decl.declarations) {
+            attributes.insert(decl.attributes.map!toJson);
+            ret ~= toJson(decl.declarations).array;
+            attributes.removeFront(decl.attributes.length);
+            continue;
+        }
+
         Nullable!JSONValue value;
         enum get(string name) = "if (decl."~name~") value = toJson(cast("~name[0..1].toUpper~name[1..$]~")decl."~name~");";
-
         mixin(get!"classDeclaration");
         mixin(get!"functionDeclaration");
         mixin(get!"constructor");
+        mixin(get!"importDeclaration");
 
         if (!value.isNull) {
-            if (value.object["doc"].str.toLower == "ditto") {
+            // Set attributes
+            if ("attributes" !in value.object) {
+                value.object["attributes"] = attributes.array.toJson;
+            }
+
+            if ("doc" in value.object && value.object["doc"].str.toLower == "ditto") {
                 ret[$-1].object["sig"].str = ret[$-1].object["sig"].str ~ "\n" ~ value.object["sig"].str;
-            } else{
+            } else {
                 ret ~= value.get;
             }
         }
     }
-    return ret.filter!(d => d.object["doc"].str != "").array.toJson;
+    return ret.filter!(d => "doc" !in d.object || d.object["doc"].str != "")
+              .array
+              .toJson;
+}
+
+auto toJson(Attribute attr) {
+    if (attr.attribute == tok!"") {
+        return "!!";
+    } else if (attr.identifierChain) {
+        return attr.identifierChain.identifier_join;
+    } else {
+        return str(attr.attribute.type);
+    }
+}
+
+auto toJson(StorageClass attr) {
+    if (attr.token == tok!"") {
+        return "!!";
+    } else {
+        return str(attr.token.type);
+    }
 }
 
 auto toJson(ClassDeclaration decl) {
@@ -96,6 +135,7 @@ auto toJson(FunctionDeclaration decl) {
     return JSONValue([
         "name": decl.name.text.toJson,
         "sig": decl.getSig.toJson,
+        "attributes": (attributes.array ~ decl.attributes.map!toJson.array).toJson,
         "doc": decl.comment.toJson,
         "kind": "function".toJson,
     ]);
@@ -117,4 +157,22 @@ auto toJson(Constructor decl) {
 
 auto getSig(Constructor decl) {
     return "this";
+}
+
+auto toJson(ImportDeclaration decl) {
+    return JSONValue([
+        "imported": decl.getImported,
+        "kind": "import".toJson,
+    ]);
+}
+
+auto getImported(SingleImport imp) {
+    return JSONValue([
+        "rename": imp.rename.text,
+        "name": imp.identifierChain.identifier_join,
+    ]);
+}
+
+auto getImported(ImportDeclaration decl) {
+    return decl.singleImports.map!getImported.array.toJson;
 }
