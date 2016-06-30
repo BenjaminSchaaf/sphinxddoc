@@ -29,17 +29,19 @@ class DObject(ObjectDescription):
     def run(self):
         env = self.state.document.settings.env
 
-        if 'name' in self.options:
-            self.name = self.options['name']
-        else:
-            self.name = self.infer_name()
-
+        self.name = self.get_name()
         fullname = self.get_fullname(self.name)
 
         if 'noindex' not in self.options:
             env.domaindata['d']['objects'][fullname] = (env.docname, self.get_objtype())
 
         return ObjectDescription.run(self)
+
+    def get_name(self):
+        if 'name' in self.options:
+            return self.options['name']
+        else:
+            return self.infer_name()
 
     def get_fullname(self, name):
         temp_data = self.state.document.settings.env.temp_data
@@ -57,7 +59,8 @@ class DObject(ObjectDescription):
 class DModule(DObject):
     def run(self):
         env = self.state.document.settings.env
-        modname = self.arguments[0]
+
+        modname = self.get_name()
         env.temp_data['d:scope'] = modname.strip()
 
         ret = DObject.run(self)
