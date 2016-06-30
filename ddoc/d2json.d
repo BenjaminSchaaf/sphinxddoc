@@ -14,6 +14,7 @@ import pyd.pyd;
 import dparse.ast;
 import dparse.lexer;
 import dparse.parser;
+import formatter = dparse.formatter;
 import dparse.rollback_allocator;
 
 string d2json(string path) {
@@ -334,4 +335,11 @@ string getSig(TemplateTypeParameter param) {
 
 string getSig(TemplateValueParameter param) {
     return "%s %s".format(param.type.getSig, param.identifier.text);
+}
+
+string getSig(AssignExpression assign) {
+    string output;
+    void myprint(in string s) { output ~= s; }
+    formatter.format(&myprint, assign);
+    return output;
 }

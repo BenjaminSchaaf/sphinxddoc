@@ -33,6 +33,8 @@ class Documenter(autodoc.Documenter):
         if self.object is not None: return True
 
         self.object = parse.parse_file(self.objpath)
+        self.directive.filename_set.add(self.objpath)
+
         return True
 
     def format_name(self):
