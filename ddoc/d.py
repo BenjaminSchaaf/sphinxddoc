@@ -26,6 +26,9 @@ class DObject(ObjectDescription):
         'noindex': directives.flag,
     }
 
+    def get_signatures(self):
+        return self.arguments[0].split("\n")
+
     def run(self):
         env = self.state.document.settings.env
 
@@ -109,6 +112,13 @@ class DFunction(DObject):
     def get_objtype(self):
         return'function'
 
+class DTemplate(DObject):
+    def infer_name(self):
+        return 'TODO'
+
+    def get_objtype(self):
+        return 'template'
+
 class DAlias(DObject):
     def infer_name(self):
         return 'TODO'
@@ -151,6 +161,7 @@ class DDomain(Domain):
         'struct':    ObjType(l_('struct'),    'struct', 'obj'),
         'interface': ObjType(l_('interface'), 'inter',  'obj'),
         'function':  ObjType(l_('function'),  'func',   'obj'),
+        'template':  ObjType(l_('template'),  'templ',  'obj'),
         'alias':     ObjType(l_('alias'),     'alias',  'obj'),
         'enum':      ObjType(l_('enum'),      'enum',   'obj'),
         'variable':  ObjType(l_('variable'),  'var',    'obj'),
@@ -162,6 +173,7 @@ class DDomain(Domain):
         'struct':    DStruct,
         'interface': DInterface,
         'function':  DFunction,
+        'template':  DTemplate,
         'alias':     DAlias,
         'enum':      DEnum,
         'variable':  DVariable,
@@ -173,6 +185,7 @@ class DDomain(Domain):
         'struct': DXRefRole('struct'),
         'inter':  DXRefRole('inter'),
         'func':   DXRefRole('func'),
+        'templ':  DXRefRole('templ'),
         'alias':  DXRefRole('alias'),
         'enum':   DXRefRole('enum'),
         'var':    DXRefRole('var'),
