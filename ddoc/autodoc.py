@@ -122,10 +122,6 @@ class Documenter(autodoc.Documenter):
                 all_members=True, real_modname=self.real_modname,
                 check_module=False)
 
-    def generate(self, *args, **kwargs):
-        result = super().generate(*args, **kwargs)
-        print(self.directive.result)
-
 class ModuleDocumenter(Documenter):
     objtype = 'module'
 
@@ -141,12 +137,28 @@ class StructDocumenter(Documenter):
 class VariableDocumenter(Documenter):
     objtype = 'variable'
 
+class EnumDocumenter(Documenter):
+    objtype = 'enum'
+
+class AliasDocumenter(Documenter):
+    objtype = 'alias'
+
+class TemplateDocumenter(Documenter):
+    objtype = 'template'
+
 def setup(app):
-    app.add_autodocumenter(ModuleDocumenter)
-    app.add_autodocumenter(FunctionDocumenter)
-    app.add_autodocumenter(ClassDocumenter)
-    app.add_autodocumenter(StructDocumenter)
-    app.add_autodocumenter(VariableDocumenter)
+    documenters = [
+        ModuleDocumenter,
+        FunctionDocumenter,
+        ClassDocumenter,
+        StructDocumenter,
+        VariableDocumenter,
+        EnumDocumenter,
+        AliasDocumenter,
+        TemplateDocumenter,
+    ]
+    for documenter in documenters:
+        app.add_autodocumenter(documenter)
 
     app.add_config_value('autoclass_content', 'class', True)
     app.add_config_value('autodoc_member_order', 'alphabetic', True)
