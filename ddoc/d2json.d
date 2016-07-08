@@ -15,6 +15,7 @@ import dparse.ast;
 import dparse.lexer;
 import dparse.parser;
 import formatter = dparse.formatter;
+import dparse.formatter : IndentStyle;
 import dparse.rollback_allocator;
 
 string d2json(string path) {
@@ -31,7 +32,7 @@ extern (C) void PydMain() {
     module_init();
 }
 
-static SList!string attributes;
+static SList!Attribute attributes;
 
 auto parse(ubyte[] source, string filename) {
     auto config = LexerConfig(filename);
@@ -68,7 +69,7 @@ JSONValue toJson(Declaration[] declarations) {
     foreach (decl; declarations) {
         // expand attribute declarations
         if (decl.declarations) {
-            attributes.insert(decl.attributes.map!toJson);
+            attributes.insert(decl.attributes);
             ret ~= toJson(decl.declarations).array;
             attributes.removeFront(decl.attributes.length);
             continue;
@@ -82,11 +83,13 @@ JSONValue toJson(Declaration[] declarations) {
         mixin(get!"functionDeclaration");
         mixin(get!"constructor");
         mixin(get!"variableDeclaration");
+        mixin(get!"aliasDeclaration");
+        mixin(get!"templateDeclaration");
 
         if (!value.isNull) {
             // Set attributes
             if ("attributes" !in value.object) {
-                value.object["attributes"] = attributes.array.toJson;
+                value.object["attributes"] = attributes.array.map!getSig.array.toJson;
             }
 
             if ("doc" in value.object && value.object["doc"].str.toLower == "ditto") {
@@ -129,13 +132,6 @@ auto toJson(ClassDeclaration decl) {
     ]);
 }
 
-auto getSig(ClassDeclaration decl) {
-    auto name = decl.name.text;
-    auto ret = "class %s".format(name);
-    if (decl.templateParameters) ret ~= decl.templateParameters.getSig;
-    return ret;
-}
-
 auto toJson(StructDeclaration decl) {
     return JSONValue([
         "name": decl.name.text.toJson,
@@ -146,34 +142,14 @@ auto toJson(StructDeclaration decl) {
     ]);
 }
 
-auto getSig(StructDeclaration decl) {
-    auto name = decl.name.text;
-    auto ret = "struct %s".format(name);
-    if (decl.templateParameters) ret ~= decl.templateParameters.getSig;
-    return ret;
-}
-
 auto toJson(FunctionDeclaration decl) {
     return JSONValue([
         "name": decl.name.text.toJson,
         "sig": decl.getSig.toJson,
-        "attributes": (attributes.array ~ decl.attributes.map!toJson.array).toJson,
+        "attributes": (attributes.array ~ decl.attributes).map!getSig.array.toJson,
         "doc": decl.comment.toJson,
         "kind": "function".toJson,
     ]);
-}
-
-auto getSig(FunctionDeclaration decl) {
-    string ret = "";
-    if (decl.returnType) {
-        ret ~= "%s ".format(decl.returnType.getSig);
-    } else {
-        ret ~= "auto ";
-    }
-    if (decl.hasAuto) ret ~= "auto ";
-    if (decl.hasRef) ret ~= "ref ";
-    ret ~= "%s%s".format(decl.name.text, decl.parameters.getSig);
-    return ret;
 }
 
 auto toJson(Constructor decl) {
@@ -183,10 +159,6 @@ auto toJson(Constructor decl) {
         "doc": decl.comment.toJson,
         "kind": "function".toJson,
     ]);
-}
-
-auto getSig(Constructor decl) {
-    return "this";
 }
 
 auto toJson(ImportDeclaration decl) {
@@ -219,14 +191,6 @@ auto toJson(VariableDeclaration decl) {
     ]);
 }
 
-auto getSig(VariableDeclaration decl) {
-    return "%s %s".format(decl.type.getSig, decl.declarators.map!getSig.join(", "));
-}
-
-auto getSig(Declarator decl) {
-    return decl.name.text;
-}
-
 auto toJson(AutoDeclaration decl) {
     return JSONValue([
         "name": decl.identifiers[0].text.toJson,
@@ -236,110 +200,164 @@ auto toJson(AutoDeclaration decl) {
     ]);
 }
 
-auto getSig(AutoDeclaration decl) {
-    return "auto %s".format(decl.identifiers.map!(i => i.text).join(", "));
+auto toJson(AliasDeclaration decl) {
+    return JSONValue([
+        "name": decl.initializers[0].name.text.toJson,
+        "sig": decl.getSig.toJson,
+        "doc": decl.comment.toJson,
+        "kind": "alias".toJson,
+    ]);
 }
 
-string getSig(Type type) {
-    auto suffix = type.typeSuffixes.map!getSig.join("");
-    return "%s%s".format(type.type2.getSig, suffix);
+auto toJson(TemplateDeclaration decl) {
+    return JSONValue([
+        "name": decl.name.text.toJson,
+        "sig": decl.getSig.toJson,
+        "doc": decl.comment.toJson,
+        "kind": "template".toJson,
+    ]);
 }
 
-auto getSig(TypeSuffix suffix) {
-    if (suffix.star != tok!"") {
-        return suffix.star.text;
-    } if (suffix.array) {
-        if (suffix.type) {
-            return "[%s]".format(suffix.type.getSig);
-        }
-        return "[]";
-    } if (suffix.parameters) {
-        return " %s%s".format(str(suffix.delegateOrFunction.type),
-                              suffix.parameters.getSig);
-    }
-    return "?1";
-}
-
-string getSig(Type2 type) {
-    if (type.builtinType != 0) {
-        return str(type.builtinType);
-    } if (type.identifierOrTemplateChain) {
-        return type.identifierOrTemplateChain.getSig;
-    } if (type.symbol) {
-        return type.symbol.identifierOrTemplateChain.getSig;
-    }
-    return "?2";
-}
-
-string getSig(IdentifierOrTemplateChain chain) {
-    return chain.identifiersOrTemplateInstances
-                .map!getSig.array.join("");
-}
-
-string getSig(IdentifierOrTemplateInstance iort) {
-    if (iort.templateInstance) {
-        return iort.templateInstance.getSig;
-    }
-    return iort.identifier.text;
-}
-
-string getSig(TemplateInstance inst) {
-    return "%s!%s".format(inst.identifier.text, inst.templateArguments.getSig);
-}
-
-string getSig(TemplateArguments args) {
-    if (args.templateArgumentList) {
-        return args.templateArgumentList.getSig;
-    }
-    return args.templateSingleArgument.token.text;
-}
-
-string getSig(TemplateArgumentList list) {
-    return "(%s)".format(list.items.map!getSig.join(", "));
-}
-
-string getSig(TemplateArgument arg) {
-    if (arg.type) {
-        return arg.type.getSig;
-    }
-    return "?4";
-}
-
-string getSig(Parameters params) {
-    return "(%s)".format(params.parameters.map!getSig.join(", "));
-}
-
-string getSig(Parameter param) {
-    if (param.name.type == tok!"") {
-        return param.type.getSig;
-    }
-    return "%s %s".format(param.type.getSig, param.name.text);
-}
-
-string getSig(TemplateParameters params) {
-    return "(%s)".format(params.templateParameterList.items.map!getSig.join(", "));
-}
-
-string getSig(TemplateParameter param) {
-    if (param.templateTypeParameter) {
-        return param.templateTypeParameter.getSig;
-    } if (param.templateValueParameter) {
-        return param.templateValueParameter.getSig;
-    }
-    return "?5";
-}
-
-string getSig(TemplateTypeParameter param) {
-    return param.identifier.text;
-}
-
-string getSig(TemplateValueParameter param) {
-    return "%s %s".format(param.type.getSig, param.identifier.text);
-}
-
-string getSig(AssignExpression assign) {
+string getSig(T)(T node) {
     string output;
-    void myprint(in string s) { output ~= s; }
-    formatter.format(&myprint, assign);
-    return output;
+    void toOutput(in string s) { output ~= s; }
+    dformat(&toOutput, node);
+    return output.strip;
+}
+
+void dformat(Sink, T)(Sink sink, T node) {
+    Formatter!Sink formatter = new Formatter!Sink(sink, false, IndentStyle.otbs, 4);
+    formatter.format(node);
+}
+
+/**
+ * Slightly modified code from dparse.formatter to only format signatures of things.
+ */
+class Formatter(Sink) : formatter.Formatter!Sink {
+    this(Sink sink, bool useTabs = false, IndentStyle style = IndentStyle.allman, uint indentWidth = 4) {
+        super(sink, useTabs, style, indentWidth);
+    }
+
+    alias format = formatter.Formatter!Sink.format;
+
+    override void format(const FunctionDeclaration decl, const Attribute[] attrs = attributes.array) {
+        newThing(What.functionDecl);
+        putAttrs(attrs);
+
+        foreach (sc; decl.storageClasses) {
+            format(sc);
+            space();
+        }
+
+        if (decl.returnType) format(decl.returnType);
+
+        space();
+        format(decl.name);
+
+        if (decl.templateParameters) format(decl.templateParameters);
+        if (decl.parameters) format(decl.parameters);
+
+        foreach (attr; decl.memberFunctionAttributes) {
+            space();
+            format(attr);
+        }
+        if (decl.constraint) {
+            space();
+            format(decl.constraint);
+        }
+    }
+
+    override void format(const Constructor constructor, const Attribute[] attrs = attributes.array) {
+        newThing(What.functionDecl);
+        putAttrs(attrs);
+
+        put("this");
+
+        if (constructor.templateParameters) format(constructor.templateParameters);
+
+        if (constructor.parameters) format(constructor.parameters);
+
+        foreach (att; constructor.memberFunctionAttributes) {
+            space();
+            format(att);
+        }
+
+        if (constructor.constraint) {
+            space();
+            format(constructor.constraint);
+        }
+    }
+
+    override void format(const TemplateDeclaration templateDeclaration, const Attribute[] attrs = attributes.array) {
+        with(templateDeclaration) {
+            newThing(What.other);
+            putAttrs(attrs);
+
+            put("template ");
+            format(name);
+
+            if (templateParameters) format(templateParameters);
+
+            if (constraint) {
+                space();
+                format(constraint);
+            }
+        }
+    }
+
+    override void format(const AliasDeclaration aliasDeclaration, const Attribute[] attrs = attributes.array) {
+        with(aliasDeclaration) {
+            newThing(What.other);
+            putAttrs(attrs);
+            put("alias ");
+
+            if (initializers.length) {
+                foreach (count, init; initializers) {
+                    if (count) put(", ");
+                    format(init);
+                }
+            } else {
+                foreach (storageClass; storageClasses) {
+                    format(storageClass);
+                    space();
+                }
+
+                if (type) {
+                    format(type);
+                    space();
+                }
+                format(identifierList);
+            }
+        }
+    }
+
+    override void format(const VariableDeclaration decl, const Attribute[] attrs = attributes.array) {
+        newThing(What.variableDecl);
+        putAttrs(attrs);
+
+        if (decl.autoDeclaration) format(decl.autoDeclaration);
+        else {
+            foreach (c; decl.storageClasses) {
+                format(c);
+                space();
+            }
+            if (decl.type) format(decl.type);
+            if (decl.declarators.length) space();
+            foreach(count, d; decl.declarators) {
+                if (count) put(", ");
+                format(d);
+            }
+        }
+    }
+
+    override void format(const Constraint constraint) {
+        if (constraint.expression) {
+            put("if (");
+            format(constraint.expression);
+            put(")");
+        }
+    }
+
+    override void format(const StructBody structBody) {}
+    override void putComment(string c) {}
 }
