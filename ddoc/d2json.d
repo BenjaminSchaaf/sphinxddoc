@@ -86,6 +86,8 @@ JSONValue toJson(Declaration[] declarations) {
         mixin(get!"aliasDeclaration");
         mixin(get!"templateDeclaration");
 
+        if (decl.unittest_) value = toJson(cast(Unittest)decl.unittest_);
+
         if (!value.isNull) {
             // Set attributes
             if ("attributes" !in value.object) {
@@ -94,6 +96,12 @@ JSONValue toJson(Declaration[] declarations) {
 
             if ("doc" in value.object && value.object["doc"].str.toLower == "ditto") {
                 ret[$-1].object["sig"].str = ret[$-1].object["sig"].str ~ "\n" ~ value.object["sig"].str;
+            } else if ("kind" in value.object && value.object["kind"].str == "unittest") {
+                if (value.object["doc"].str is null) continue;
+                if ("examples" !in ret[$-1].object) {
+                    ret[$-1].object["examples"] = [].toJson;
+                }
+                ret[$-1].object["examples"].array ~= value;
             } else {
                 ret ~= value.get;
             }
@@ -218,7 +226,17 @@ auto toJson(TemplateDeclaration decl) {
     ]);
 }
 
+auto toJson(Unittest unit) {
+    return JSONValue([
+        "startLocation": (unit.blockStatement.startLocation + 2).toJson,
+        "endLocation": (unit.blockStatement.endLocation - 2).toJson,
+        "doc": unit.comment.toJson,
+        "kind": "unittest".toJson,
+    ]);
+}
+
 string getSig(T)(T node) {
+    if (node is null) return "";
     string output;
     void toOutput(in string s) { output ~= s; }
     dformat(&toOutput, node);
@@ -226,7 +244,7 @@ string getSig(T)(T node) {
 }
 
 void dformat(Sink, T)(Sink sink, T node) {
-    Formatter!Sink formatter = new Formatter!Sink(sink, false, IndentStyle.otbs, 4);
+    auto formatter = new Formatter!Sink(sink, false, IndentStyle.otbs, 4);
     formatter.format(node);
 }
 

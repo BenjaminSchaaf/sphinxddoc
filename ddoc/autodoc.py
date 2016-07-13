@@ -7,15 +7,16 @@ from ddoc.d import DModule
 from ddoc import parse
 
 class Documenter(autodoc.Documenter):
-    def __init__(self, directive, name, indent=u'', object=None):
+    def __init__(self, directive, name, indent=u'', object=None, objpath=None):
         super().__init__(directive, name, indent)
         self.object = object
+        self.objpath = objpath
 
     def get_real_modname(self):
         return self.object["name"]
 
     def parse_name(self):
-        if self.object is not None: return True
+        if self.objpath is not None: return True
 
         lookup_path = self.env.config.autodoc_lookup_path
         self.objpath = parse.lookup_module_file(lookup_path, self.name)
@@ -88,6 +89,29 @@ class Documenter(autodoc.Documenter):
                 else:
                     self.add_line(u'  | :d:mod:`%s`' % (name['name']), sourcename)
 
+    def document_examples(self):
+        if 'examples' not in self.object:
+            return
+
+        examples = self.object['examples']
+        if len(examples) == 0:
+            return
+
+        sourcename = self.get_sourcename()
+        self.add_line(u'Examples:', sourcename)
+        for example in examples:
+            if example['doc']:
+                self.add_line(u'    %s' % example['doc'], sourcename)
+                self.add_line(u'', sourcename)
+            self.add_line(u'    .. code-block:: d', sourcename)
+            self.add_line(u'', sourcename)
+
+            test_file = open(self.objpath, 'r')
+            test_file.seek(example['startLocation'])
+            test = test_file.read(example['endLocation'] - example['startLocation'])
+            for line in test.split('\n'):
+                self.add_line(u'        %s' % line, sourcename)
+
     def document_members(self, all_members=False):
         """Generate reST for member documentation.
 
@@ -95,6 +119,7 @@ class Documenter(autodoc.Documenter):
         *self.options.members*.
         """
         self.document_imports()
+        self.document_examples()
 
         want_all = all_members or self.options.inherited_members or \
             self.options.members is autodoc.ALL
@@ -114,7 +139,8 @@ class Documenter(autodoc.Documenter):
                 continue
 
             full_mname = "%s.%s" % (self.name, mname)
-            documenter = klass(self.directive, full_mname, self.indent, object=member)
+            documenter = klass(self.directive, full_mname, self.indent,
+                               object=member, objpath=self.objpath)
             memberdocumenters.append(documenter)
 
         for documenter in memberdocumenters:
